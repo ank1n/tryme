@@ -1,64 +1,44 @@
 package main
 
 import (
-	"fmt"
-	"net/http"
 	"html/template"
 	"io/ioutil"
+	"net/http"
 	"regexp"
-	"errors"
+	"path/filepath"
+	"strings"
+	"fmt"
 )
-
 
 type Page struct {
 	Title string
 	Body  []byte
 }
 
+type rootPage struct {
+	Title string
+	Body  []byte
+	Files template.HTML
+}
+
+
+var (
+	templatesPath = "template/"
+	dataPath = "data/"
+)
+
 func (p *Page) save() error {
-	filename := p.Title + ".txt"
+	filename := dataPath + p.Title + ".txt"
 	return ioutil.WriteFile(filename, p.Body, 0600)
 }
 
 func loadPage(title string) (*Page, error) {
-	filename := title + ".txt"
-	body, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-	return &Page{Title: title, Body: body}, nil
-}
-
-func handler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hi there, I love %s!", r.URL.Path[1:])
-}
-
-var validPath = regexp.MustCompile("^/(edit|save|view)/([a-zA-Z0-9]+)$")
-var templates = template.Must(template.ParseFiles("edit.html", "view.html"))
-func renderTemplate(w http.ResponseWriter, tmpl string, p *Page) {
-	err := templates.ExecuteTemplate(w, tmpl+".html", p)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		m := validPath.FindStringSubmatch(r.URL.Path)
-		if m == nil {
-			http.NotFound(w, r)
-			return
+		filename := dataPath + title + ".txt"
+		body, err := ioutil.ReadFile(filename)
+		if err != nil {
+			return nil, err
 		}
-		fn(w, r, m[2])
-	}
-}
-
-func getTitle(w http.ResponseWriter, r *http.Request) (string, error) {
-	m := validPath.FindStringSubmatch(r.URL.Path)
-	if m == nil {
-		http.NotFound(w, r)
-		return "", errors.New("Inv page title")
-	}
-	return m[2], nil
+		return &Page{Title: title, Body: body}, nil
 }
 
 func viewHandler(w http.ResponseWriter, r *http.Request, title string) {
@@ -68,6 +48,36 @@ func viewHandler(w http.ResponseWriter, r *http.Request, title string) {
 		return
 	}
 	renderTemplate(w, "view", p)
+}
+
+func rootHandler(w http.ResponseWriter, r *http.Request) {
+	var a string
+	var til string
+	//var startHref string
+	startHref := `<a href=/edit/`
+	var endHref	= `</a>`
+	til = "root"
+	files, _ := ioutil.ReadDir("data/")
+	for _, f := range files {
+		m := strings.Replace( f.Name(), ".txt", "", 1)
+		a = a + startHref + m + `>` + m + endHref + "\n"
+	}
+	filename := templatesPath + "root.txt"
+	body, err := ioutil.ReadFile(filename)
+	if err != nil {
+	}
+	b :=template.HTML(a)
+	renderRoot(w, "root", &rootPage{Title: til, Body: body, Files: b})
+
+	fmt.Println(string(a))
+}
+
+func editHandler(w http.ResponseWriter, r *http.Request, title string) {
+	p, err := loadPage(title)
+	if err != nil {
+		p = &Page{Title: title}
+	}
+	renderTemplate(w, "edit", p)
 }
 
 func saveHandler(w http.ResponseWriter, r *http.Request, title string) {
@@ -81,25 +91,39 @@ func saveHandler(w http.ResponseWriter, r *http.Request, title string) {
 	http.Redirect(w, r, "/view/"+title, http.StatusFound)
 }
 
-func editHandler(w http.ResponseWriter, r *http.Request, title string) {
-	p, err := loadPage(title)
+var templates = template.Must(template.ParseGlob(filepath.Join(templatesPath, "*.html")))
+
+func renderTemplate(w http.ResponseWriter, tmpl string, p *Page) {
+	err := templates.ExecuteTemplate(w, tmpl+".html", p)
 	if err != nil {
-		p = &Page{Title: title}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	renderTemplate(w, "edit", p)
+}
+func renderRoot(w http.ResponseWriter, tmpl string, p *rootPage) {
+	err := templates.ExecuteTemplate(w, "root.html", p)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+var validPath = regexp.MustCompile("^/(edit|save|view)/([a-zA-Z0-9]+)$")
+
+func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		m := validPath.FindStringSubmatch(r.URL.Path)
+		if m == nil {
+			http.NotFound(w, r)
+			return
+		}
+		fn(w, r, m[2])
+	}
 }
 
 func main() {
-	p1 := &Page{Title: "TestPage", Body: []byte("This is a sample Page.")}
-	p1.save()
-	p2, _ := loadPage("TestPage")
-	fmt.Println(string(p2.Body))
-
-	http.HandleFunc("/", handler)
+	http.HandleFunc("/", rootHandler)
 	http.HandleFunc("/view/", makeHandler(viewHandler))
 	http.HandleFunc("/edit/", makeHandler(editHandler))
 	http.HandleFunc("/save/", makeHandler(saveHandler))
 
 	http.ListenAndServe(":8080", nil)
-
 }
