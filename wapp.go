@@ -53,7 +53,7 @@ func viewHandler(w http.ResponseWriter, r *http.Request, title string) {
 func rootHandler(w http.ResponseWriter, r *http.Request) {
 	var a string
 	var til string
-	//var startHref string
+	//var startHref stringa
 	startHref := `<a href=/edit/`
 	var endHref	= `</a>`
 	til = "root"
