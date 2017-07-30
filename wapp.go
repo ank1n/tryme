@@ -21,7 +21,6 @@ type rootPage struct {
 	Files template.HTML
 }
 
-
 var (
 	templatesPath = "template/"
 	dataPath = "data/"
