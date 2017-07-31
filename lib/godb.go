@@ -1,4 +1,4 @@
-package godb
+package lib
 
 import "database/sql"
 
