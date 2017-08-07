@@ -119,19 +119,20 @@ func format(rs []Page) {
 }
 
 func loadPage(title string) (*Page, error) {
+	//println("\n"+"loadpage", title)
+	var qq string
+	qq = "loadpagegetdbcall"
+	vks, err := getDb(qq)
 
-	bks := make([]*Page, 0)
-    println("loadpage")
-	bks, err := getDb()
 	if err != nil {
 	}
-
-	for _, bk := range bks {
+	for _, bk := range vks {
 		if bk.Title == title {
+			println("inside")
+			println(bk.Title)
 			return &Page{Title: bk.Title, Body: bk.Body}, nil
-			fmt.Println(bk.Title)
 		} else {
-			return nil, nil
+			println("fig")
 		}
 	}
 	return nil, nil
@@ -162,7 +163,6 @@ func exist(title string) (int64, error) {
 	defer db.Close()
 	var name= title
 	rows, err := db.Query("SELECT * FROM notebook where name like '" + name + "' ORDER BY id")
-	//defer rows.Close();
 	if rows == nil {
 		return 0, nil
 	}
@@ -183,11 +183,10 @@ func exist(title string) (int64, error) {
 	return 0, errors.New("can't work")
 }
 
-func getDb() ([]*Page, error) {
+func getDb(qq string) ([]*Page, error) {
+	println("\n"+"getdb", qq)
 	db, err := sql.Open("postgres", params())
 	chk(err)
-	defer db.Close()
-
 	rows, err := db.Query("SELECT * FROM notebook ORDER BY id")
 	bks := make([]*Page, 0)
 	for rows.Next() {
@@ -198,33 +197,27 @@ func getDb() ([]*Page, error) {
 		}
 		bks = append(bks, bk)
 	}
+	fmt.Println(bks)
+
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
-	return bks, nil
 	defer rows.Close()
+	defer db.Close()
 	return bks, nil
-}
-
-func viewHandler(w http.ResponseWriter, r *http.Request, title string) {
-	p, err := loadPage(title)
-	println("call viewHandler")
-	if err != nil {
-		http.Redirect(w, r, "/edit/"+title, http.StatusFound)
-		return
-	}
-	renderTemplate(w, "view", p)
 }
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
 	var a string
 	var til string
+	var qq string
+	qq = "rootgetdbcall"
 	startHref := `<a href=/edit/`
 	var endHref	= `</a>`
 	til = "root"
 	bks := make([]*Page, 0)
 
-	bks, err := getDb()
+	bks, err := getDb(qq)
 	if err != nil {
 	}
 	for _, bk := range bks {
@@ -241,14 +234,13 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 func editHandler(w http.ResponseWriter, r *http.Request, title string) {
 	p, err := loadPage(title)
 	if err != nil {
-		p = &Page{Title: title}
+		p = &Page{Title: title, Body: nil}
 	}
 	renderTemplate(w, "edit", p)
 }
 
 func saveHandler(w http.ResponseWriter, r *http.Request, title string) {
 	body := r.FormValue("body")
-	//p := &Page{Title: title, Body: []byte(body)}
 	u, err := exist(title)
 	if err == nil {
 		update(u, title, []byte(body))
@@ -293,18 +285,12 @@ func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.Handl
 	}
 }
 
+func handlerICon(w http.ResponseWriter, r *http.Request) {}
+
 func main() {
-	db, err := sql.Open("postgres", params())
-	chk(err)
-	defer db.Close()
-
-	_, err = db.Exec("CREATE TABLE IF NOT EXISTS " +
-		`notebook("id" SERIAL PRIMARY KEY,` +
-		`"title" varchar(50), "body" varchar(100))`)
-	chk(err)
-
 	http.HandleFunc("/", rootHandler)
-	http.HandleFunc("/view/", makeHandler(viewHandler))
+	http.HandleFunc("/favicon.ico", handlerICon)
+
 	http.HandleFunc("/edit/", makeHandler(editHandler))
 	http.HandleFunc("/save/", makeHandler(saveHandler))
 
